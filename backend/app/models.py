@@ -39,7 +39,8 @@ class GraphPayload(BaseModel):
 
 class FilterPayload(BaseModel):
     countries: list[CountryId]
-    milkLevel: MilkLevel
+    milkLevel: MilkLevel = 'all'
+    milkRange: list[int] = Field(default_factory=lambda: [0, 100], min_length=2, max_length=2)
     strength: list[int] = Field(min_length=2, max_length=2)
     volume: list[int] = Field(min_length=2, max_length=2)
     search: str = ''

@@ -14,7 +14,10 @@ def milk_bounds(level: str) -> tuple[int, int]:
 
 def filter_graph(payload: FilterPayload) -> FilterResponse:
     search = payload.search.strip().lower()
-    min_milk, max_milk = milk_bounds(payload.milkLevel)
+    if len(payload.milkRange) == 2:
+        min_milk, max_milk = payload.milkRange
+    else:
+        min_milk, max_milk = milk_bounds(payload.milkLevel)
 
     filtered = []
     for coffee in COFFEE_NODES:

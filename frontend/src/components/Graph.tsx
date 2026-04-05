@@ -1,6 +1,5 @@
-import * as d3 from 'd3'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { CoffeeNode, GraphEdge } from '../types/coffee'
+import { useMemo } from 'react'
+import { CoffeeNode, GraphEdge, RelationType } from '../types/coffee'
 
 interface GraphProps {
   nodes: CoffeeNode[]
@@ -12,29 +11,57 @@ interface GraphProps {
   onHover: (id: string | null) => void
 }
 
-type SimNode = CoffeeNode & d3.SimulationNodeDatum
-
-type SimEdge = GraphEdge & {
-  source: SimNode
-  target: SimNode
+const relationText: Record<RelationType, string> = {
+  variant_of: 'variant',
+  similar_to: 'vergelijkbaar',
+  contains_milk: 'verschil in melk',
+  popular_in_country: 'regionale link',
 }
 
-const countryColor: Record<string, string> = {
-  italy: '#f4b183',
-  spain: '#59b2ff',
+const countryText: Record<string, string> = {
+  italy: 'Italie',
+  spain: 'Spanje',
 }
 
-const countryX: Record<string, number> = {
-  italy: 0.34,
-  spain: 0.66,
+const nameForBubble = (name: string) => {
+  if (name.length <= 14) {
+    return name
+  }
+  return `${name.slice(0, 13)}...`
 }
 
-const edgeStroke: Record<GraphEdge['type'], string> = {
-  variant_of: '#e2ab86',
-  similar_to: '#94a3b8',
-  contains_milk: '#f9d38b',
-  popular_in_country: '#64748b',
+const compactLabelParts = (base: CoffeeNode, other: CoffeeNode, relation: RelationType) => {
+  const detailParts: string[] = []
+
+  const strengthDiff = other.strength - base.strength
+  const volumeDiff = other.volume_ml - base.volume_ml
+  const milkDiff = other.milk - base.milk
+
+  if (strengthDiff !== 0) {
+    detailParts.push(strengthDiff > 0 ? 'sterker' : 'minder sterk')
+  }
+
+  if (volumeDiff !== 0) {
+    detailParts.push(volumeDiff > 0 ? 'groter' : 'kleiner')
+  }
+
+  if (milkDiff !== 0) {
+    detailParts.push(milkDiff > 0 ? 'meer melk' : 'minder melk')
+  }
+
+  const line1 = relationText[relation]
+  const line2 = detailParts.slice(0, 2).join(', ')
+  return { line1, line2: line2 || 'directe relatie' }
 }
+
+const fillForNode = (node: CoffeeNode) => {
+  if (node.country === 'italy') {
+    return `hsl(26 95% ${58 - (node.strength - 1) * 6}%)`
+  }
+  return `hsl(207 92% ${58 - (node.strength - 1) * 6}%)`
+}
+
+const radiusForVolume = (volume: number) => 24 + ((volume - 20) / 280) * 30
 
 export function Graph({
   nodes,
@@ -45,323 +72,168 @@ export function Graph({
   onSelect,
   onHover,
 }: GraphProps) {
-  const svgRef = useRef<SVGSVGElement | null>(null)
-  const simulationRef = useRef<d3.Simulation<SimNode, SimEdge> | null>(null)
-  const positionsRef = useRef<Map<string, { x: number; y: number }>>(new Map())
-  const zoomLevelRef = useRef(1)
-  const [zoomLevel, setZoomLevel] = useState(1)
-  const [tooltip, setTooltip] = useState<{
-    x: number
-    y: number
-    name: string
-    country: string
-  } | null>(null)
+  const width = 920
+  const height = 560
+  const cx = width / 2
+  const cy = height / 2
 
-  const radiusScale = useMemo(() => {
-    const popularity = nodes.map((n) => n.popularity)
-    return d3
-      .scaleSqrt()
-      .domain([Math.min(...popularity, 20), Math.max(...popularity, 100)])
-      .range([10, 28])
-  }, [nodes])
+  const centerNode =
+    nodes.find((node) => node.id === selectedId) ??
+    nodes.find((node) => node.id === 'espresso') ??
+    nodes[0] ??
+    null
 
-  useEffect(() => {
-    if (!svgRef.current) {
-      return
+  const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes])
+
+  const directItems = useMemo(() => {
+    if (!centerNode) {
+      return []
     }
 
-    const svg = d3.select<SVGSVGElement, unknown>(svgRef.current)
-    const width = svgRef.current.clientWidth ?? 840
-    const height = svgRef.current.clientHeight ?? 580
-
-    svg.selectAll('*').remove()
-
-    const root = svg.append('g').attr('class', 'graph-root')
-    const linkLayer = root.append('g').attr('class', 'link-layer')
-    const nodeLayer = root.append('g').attr('class', 'node-layer')
-    const labelLayer = root.append('g').attr('class', 'label-layer')
-
-    const zoom = d3
-      .zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.55, 3.2])
-      .on('zoom', (event) => {
-        root.attr('transform', event.transform.toString())
-        zoomLevelRef.current = event.transform.k
-        setZoomLevel(event.transform.k)
-        labelLayer
-          .selectAll<SVGTextElement, SimNode>('text')
-          .attr('opacity', zoomLevelRef.current > 1.2 ? 0.9 : 0)
-      })
-
-    svg.call(zoom)
-
-    const simNodes: SimNode[] = nodes.map((node) => {
-      const previous = positionsRef.current.get(node.id)
-      return {
-        ...node,
-        x: previous?.x ?? width * (countryX[node.country] ?? 0.5),
-        y: previous?.y ?? height * 0.48 + (Math.random() * 24 - 12),
-      }
-    })
-
-    const idToNode = new Map(simNodes.map((node) => [node.id, node]))
-
-    const simEdges = edges
+    const mapped = edges
       .map((edge) => {
-        const source = idToNode.get(edge.source)
-        const target = idToNode.get(edge.target)
-        if (!source || !target) {
+        if (edge.source !== centerNode.id && edge.target !== centerNode.id) {
+          return null
+        }
+
+        const otherId = edge.source === centerNode.id ? edge.target : edge.source
+        const other = nodeById.get(otherId)
+        if (!other) {
           return null
         }
 
         return {
-          ...edge,
-          source,
-          target,
+          edge,
+          other,
+          label: compactLabelParts(centerNode, other, edge.type),
         }
       })
-      .filter((edge): edge is SimEdge => Boolean(edge))
-
-    const simulation = d3
-      .forceSimulation(simNodes)
-      .force(
-        'link',
-        d3
-          .forceLink<SimNode, SimEdge>(simEdges)
-          .id((d) => d.id)
-          .distance((edge) => {
-            if (edge.type === 'variant_of') {
-              return 84
-            }
-            if (edge.type === 'contains_milk') {
-              return 96
-            }
-            return 110
-          })
-          .strength(0.32),
-      )
-      .force('charge', d3.forceManyBody().strength(-145))
-      .force('center', d3.forceCenter(width / 2, height / 2))
-      .force(
-        'countryX',
-        d3
-          .forceX<SimNode>((d) => width * (countryX[d.country] ?? 0.5))
-          .strength(0.24),
-      )
-      .force('countryY', d3.forceY<SimNode>(height / 2).strength(0.08))
-      .force('collision', d3.forceCollide<SimNode>((d) => radiusScale(d.popularity) + 5))
-      .alpha(0.95)
-      .alphaDecay(0.035)
-
-    simulationRef.current = simulation
-
-    const linkSelection = linkLayer
-      .selectAll<SVGLineElement, SimEdge>('line')
-      .data(simEdges, (d) => d.id)
-      .join(
-        (enter) =>
-          enter
-            .append('line')
-            .attr('stroke', (d) => edgeStroke[d.type] ?? '#94a3b8')
-            .attr('stroke-width', 1.8)
-            .attr('stroke-opacity', 0)
-            .call((selection) =>
-              selection.transition().duration(380).attr('stroke-opacity', (d) =>
-                focusedId ? (d.source.id === focusedId || d.target.id === focusedId ? 0.85 : 0.14) : 0.42,
-              ),
-            ),
-        (update) =>
-          update.call((selection) =>
-            selection
-              .transition()
-              .duration(280)
-              .attr('stroke-opacity', (d) =>
-                focusedId ? (d.source.id === focusedId || d.target.id === focusedId ? 0.85 : 0.14) : 0.42,
-              ),
-          ),
-        (exit) => exit.call((selection) => selection.transition().duration(240).attr('stroke-opacity', 0).remove()),
+      .filter(
+        (
+          item,
+        ): item is {
+          edge: GraphEdge
+          other: CoffeeNode
+          label: { line1: string; line2: string }
+        } => Boolean(item),
       )
 
-    const nodeSelection = nodeLayer
-      .selectAll<SVGCircleElement, SimNode>('circle')
-      .data(simNodes, (d) => d.id)
-      .join(
-        (enter) =>
-          enter
-            .append('circle')
-            .attr('r', 0)
-            .attr('fill', (d) => countryColor[d.country] ?? '#f4b183')
-            .attr('stroke', '#0b0f14')
-            .attr('stroke-width', 2)
-            .style('cursor', 'pointer')
-            .call((selection) =>
-              selection
-                .transition()
-                .duration(340)
-                .attr('r', (d) => radiusScale(d.popularity)),
-            ),
-        (update) =>
-          update.call((selection) =>
-            selection
-              .transition()
-              .duration(280)
-              .attr('r', (d) => radiusScale(d.popularity)),
-          ),
-        (exit) => exit.call((selection) => selection.transition().duration(220).attr('r', 0).remove()),
-      )
+    return mapped.sort((a, b) => a.other.name.localeCompare(b.other.name))
+  }, [centerNode, edges, nodeById])
 
-    const labelSelection = labelLayer
-      .selectAll<SVGTextElement, SimNode>('text')
-      .data(simNodes, (d) => d.id)
-      .join(
-        (enter) =>
-          enter
-            .append('text')
-            .text((d) => d.name)
-            .attr('font-size', 11)
-            .attr('font-family', 'Manrope')
-            .attr('fill', '#dbe4ef')
-            .attr('text-anchor', 'middle')
-            .attr('dy', (d) => radiusScale(d.popularity) + 12)
-            .attr('opacity', zoomLevelRef.current > 1.2 ? 0.9 : 0)
-            .attr('pointer-events', 'none'),
-          (update) => update.attr('opacity', zoomLevelRef.current > 1.2 ? 0.9 : 0),
-        (exit) => exit.remove(),
-      )
+  const positionedItems = useMemo(() => {
+    if (directItems.length === 0) {
+      return []
+    }
 
-    nodeSelection
-      .on('mouseover', (event, node) => {
-        onHover(node.id)
-        setTooltip({
-          x: event.offsetX + 14,
-          y: event.offsetY + 14,
-          name: node.name,
-          country: node.country,
-        })
-      })
-      .on('mousemove', (event, node) => {
-        setTooltip({
-          x: event.offsetX + 14,
-          y: event.offsetY + 14,
-          name: node.name,
-          country: node.country,
-        })
-      })
-      .on('mouseout', () => {
-        onHover(null)
-        setTooltip(null)
-      })
-      .on('click', (event, node) => {
-        onSelect(node.id, event.shiftKey)
-      })
+    const ring = Math.min(width, height) * 0.34
 
-    nodeSelection.call(
-      d3
-        .drag<SVGCircleElement, SimNode>()
-        .on('start', (event, node) => {
-          if (!event.active) {
-            simulation.alphaTarget(0.2).restart()
-          }
-          node.fx = node.x
-          node.fy = node.y
-        })
-        .on('drag', (event, node) => {
-          node.fx = event.x
-          node.fy = event.y
-        })
-        .on('end', (event, node) => {
-          if (!event.active) {
-            simulation.alphaTarget(0)
-          }
-          node.fx = null
-          node.fy = null
-        }),
-    )
-
-    simulation.on('tick', () => {
-      linkSelection
-        .attr('x1', (d) => d.source.x ?? 0)
-        .attr('y1', (d) => d.source.y ?? 0)
-        .attr('x2', (d) => d.target.x ?? 0)
-        .attr('y2', (d) => d.target.y ?? 0)
-
-      nodeSelection
-        .attr('cx', (d) => d.x ?? 0)
-        .attr('cy', (d) => d.y ?? 0)
-        .attr('stroke-width', (d) => {
-          if (selectedId === d.id) {
-            return 3.5
-          }
-          if (compareIds.includes(d.id)) {
-            return 3
-          }
-          return 2
-        })
-        .attr('stroke', (d) => {
-          if (selectedId === d.id) {
-            return '#fde9d8'
-          }
-          if (compareIds.includes(d.id)) {
-            return '#34d399'
-          }
-          return '#0b0f14'
-        })
-        .attr('opacity', (d) => {
-          if (!focusedId) {
-            return 1
-          }
-
-          if (d.id === focusedId) {
-            return 1
-          }
-
-          const hasFocusedEdge = simEdges.some(
-            (edge) =>
-              (edge.source.id === focusedId && edge.target.id === d.id) ||
-              (edge.target.id === focusedId && edge.source.id === d.id),
-          )
-
-          return hasFocusedEdge ? 0.9 : 0.22
-        })
-
-      labelSelection
-        .attr('x', (d) => d.x ?? 0)
-        .attr('y', (d) => d.y ?? 0)
-        .attr('dy', (d) => radiusScale(d.popularity) + 12)
-        .attr('opacity', zoomLevelRef.current > 1.2 ? 0.9 : 0)
-
-      for (const node of simNodes) {
-        positionsRef.current.set(node.id, {
-          x: node.x ?? width / 2,
-          y: node.y ?? height / 2,
-        })
+    return directItems.map((item, index) => {
+      const angle = (-Math.PI / 2) + (index * (Math.PI * 2)) / directItems.length
+      const x = cx + Math.cos(angle) * ring
+      const y = cy + Math.sin(angle) * ring
+      const lx = cx + Math.cos(angle) * (ring * 0.58)
+      const ly = cy + Math.sin(angle) * (ring * 0.58)
+      return {
+        ...item,
+        x,
+        y,
+        lx,
+        ly,
       }
     })
+  }, [directItems])
 
-    simulation.alphaTarget(0.16).restart()
-    const coolDown = window.setTimeout(() => simulation.alphaTarget(0), 360)
-
-    return () => {
-      window.clearTimeout(coolDown)
-      simulation.stop()
-    }
-  }, [nodes, edges, selectedId, compareIds, focusedId, onSelect, onHover, radiusScale])
+  const hasCenter = Boolean(centerNode)
 
   return (
-    <div className="panel relative h-[560px] w-full overflow-hidden rounded-2xl">
-      <svg ref={svgRef} className="h-full w-full" role="img" aria-label="Coffee relationship graph" />
-      {tooltip && (
-        <div
-          className="pointer-events-none absolute rounded-md border border-white/10 bg-night-800/95 px-3 py-2 text-xs text-slate-100"
-          style={{ left: tooltip.x, top: tooltip.y }}
-        >
-          <p className="font-semibold text-white">{tooltip.name}</p>
-          <p className="uppercase tracking-wide text-coffee-200">{tooltip.country}</p>
-        </div>
-      )}
-      <div className="absolute bottom-3 left-3 rounded-full bg-black/40 px-3 py-1 text-xs text-slate-200">
-        Zoom: {zoomLevel.toFixed(2)}x
-      </div>
+    <div className="panel relative h-[560px] w-full overflow-hidden rounded-2xl p-2">
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full" role="img" aria-label="Schema met directe relaties">
+        <rect x="0" y="0" width={width} height={height} fill="transparent" />
+
+        {positionedItems.map((item) => {
+          const active = focusedId ? item.other.id === focusedId || centerNode?.id === focusedId : true
+          return (
+            <g key={item.edge.id} opacity={active ? 1 : 0.3}>
+              <line x1={cx} y1={cy} x2={item.x} y2={item.y} stroke="#64748b" strokeWidth="2" />
+              <text
+                x={item.lx}
+                y={item.ly}
+                fill="#dbe4ef"
+                fontSize="10"
+                textAnchor="middle"
+                style={{ paintOrder: 'stroke', stroke: '#020617', strokeWidth: 3 }}
+              >
+                <tspan x={item.lx} dy="0">{item.label.line1}</tspan>
+                <tspan x={item.lx} dy="12">{item.label.line2}</tspan>
+              </text>
+            </g>
+          )
+        })}
+
+        {hasCenter && centerNode && (
+          <g
+            transform={`translate(${cx}, ${cy})`}
+            onMouseEnter={() => onHover(centerNode.id)}
+            onMouseLeave={() => onHover(null)}
+            onClick={(event) => onSelect(centerNode.id, event.shiftKey)}
+            style={{ cursor: 'pointer' }}
+          >
+            <circle
+              r={radiusForVolume(centerNode.volume_ml)}
+              fill={fillForNode(centerNode)}
+              stroke="#f8fafc"
+              strokeWidth={3}
+            />
+            <text
+              textAnchor="middle"
+              dy=".35em"
+              fill="#f8fafc"
+              fontSize="11"
+              fontWeight={800}
+            >
+              {nameForBubble(centerNode.name)}
+            </text>
+          </g>
+        )}
+
+        {positionedItems.map((item) => {
+          const active = selectedId === item.other.id
+          const compared = compareIds.includes(item.other.id)
+          const focusDim = focusedId ? item.other.id !== focusedId && centerNode?.id !== focusedId : false
+
+          return (
+            <g
+              key={item.other.id}
+              transform={`translate(${item.x}, ${item.y})`}
+              opacity={focusDim ? 0.35 : 1}
+              onMouseEnter={() => onHover(item.other.id)}
+              onMouseLeave={() => onHover(null)}
+              onClick={(event) => onSelect(item.other.id, event.shiftKey)}
+              style={{ cursor: 'pointer' }}
+            >
+              <circle
+                r={radiusForVolume(item.other.volume_ml)}
+                fill={fillForNode(item.other)}
+                stroke={active ? '#f8fafc' : compared ? '#34d399' : '#0b0f14'}
+                strokeWidth={active ? 3.5 : compared ? 3 : 2}
+              />
+              <text
+                textAnchor="middle"
+                dy=".35em"
+                fill="#f8fafc"
+                fontSize={active ? 11 : 10}
+                fontWeight={800}
+              >
+                {nameForBubble(item.other.name)}
+              </text>
+              <title>
+                {item.other.name} · {countryText[item.other.country]} · sterkte {item.other.strength} · {item.other.volume_ml}ml
+              </title>
+            </g>
+          )
+        })}
+      </svg>
     </div>
   )
 }

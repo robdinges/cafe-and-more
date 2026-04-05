@@ -4,7 +4,7 @@ import { CoffeeNode, CompareMetrics, CountryId, FilterState, GraphEdge } from '.
 
 const defaultFilters: FilterState = {
   countries: ['italy', 'spain'],
-  milkLevel: 'all',
+  milkRange: [0, 100],
   strength: [1, 5],
   volume: [20, 280],
   search: '',

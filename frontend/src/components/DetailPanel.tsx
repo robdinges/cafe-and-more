@@ -3,17 +3,11 @@ import { CoffeeNode } from '../types/coffee'
 interface DetailPanelProps {
   node: CoffeeNode | null
   related: CoffeeNode[]
-  compareIds: string[]
-  onCompare: (id: string) => void
-  onFocus: (id: string) => void
 }
 
 export function DetailPanel({
   node,
   related,
-  compareIds,
-  onCompare,
-  onFocus,
 }: DetailPanelProps) {
   if (!node) {
     return (
@@ -23,8 +17,6 @@ export function DetailPanel({
       </section>
     )
   }
-
-  const isCompared = compareIds.includes(node.id)
 
   return (
     <section className="panel rounded-2xl p-4">
@@ -51,25 +43,6 @@ export function DetailPanel({
           <dd className="font-semibold text-white">{node.strength}/5</dd>
         </div>
       </dl>
-
-      <div className="mt-4 flex gap-2">
-        <button
-          onClick={() => onCompare(node.id)}
-          className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
-            isCompared
-              ? 'bg-emerald-500/20 text-emerald-200'
-              : 'bg-white/10 text-white hover:bg-white/20'
-          }`}
-        >
-          {isCompared ? 'Compared' : 'Compare'}
-        </button>
-        <button
-          onClick={() => onFocus(node.id)}
-          className="rounded-lg bg-coffee-400/80 px-3 py-2 text-sm font-semibold text-night-950 transition hover:bg-coffee-200"
-        >
-          Focus
-        </button>
-      </div>
 
       <div className="mt-5">
         <h3 className="text-xs uppercase tracking-wide text-slate-400">Related Coffees</h3>

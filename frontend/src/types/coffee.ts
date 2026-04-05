@@ -40,7 +40,7 @@ export type MilkLevel = 'all' | 'none' | 'little' | 'much'
 
 export interface FilterState {
   countries: CountryId[]
-  milkLevel: MilkLevel
+  milkRange: [number, number]
   strength: [number, number]
   volume: [number, number]
   search: string

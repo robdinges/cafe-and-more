@@ -12,22 +12,9 @@ interface CompareResponse {
   items: CompareMetrics[]
 }
 
-const milkRangeForLevel = (milkLevel: FilterState['milkLevel']): [number, number] => {
-  if (milkLevel === 'none') {
-    return [0, 0]
-  }
-  if (milkLevel === 'little') {
-    return [1, 40]
-  }
-  if (milkLevel === 'much') {
-    return [41, 100]
-  }
-  return [0, 100]
-}
-
 const fallbackFilter = (filters: FilterState): FilterResponse => {
   const search = filters.search.trim().toLowerCase()
-  const [minMilk, maxMilk] = milkRangeForLevel(filters.milkLevel)
+  const [minMilk, maxMilk] = filters.milkRange
 
   const nodes = graphPayload.nodes.filter((coffee) => {
     const matchCountry = filters.countries.includes(coffee.country)

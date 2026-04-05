@@ -9,6 +9,7 @@ class FilterCompareTests(unittest.TestCase):
         payload = FilterPayload(
             countries=['italy'],
             milkLevel='none',
+            milkRange=[0, 0],
             strength=[1, 5],
             volume=[20, 300],
             search='',
@@ -22,6 +23,7 @@ class FilterCompareTests(unittest.TestCase):
         payload = FilterPayload(
             countries=['italy', 'spain'],
             milkLevel='all',
+            milkRange=[0, 100],
             strength=[1, 5],
             volume=[20, 300],
             search='cort',
