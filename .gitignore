@@ -1,0 +1,23 @@
+# Node and frontend artifacts
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Logs
+*.log
