@@ -17,11 +17,13 @@ const relationLabel: Record<RelationType, string> = {
 const countryLabel: Record<CountryId, string> = {
   italy: 'Italie',
   spain: 'Spanje',
+  france: 'Frankrijk',
 }
 
 export function ExplorerView() {
   const [probantSearch, setProbantSearch] = useState('Espresso')
   const [viewMode, setViewMode] = useState<'cards' | 'graph'>('cards')
+  const [milkVisualMode, setMilkVisualMode] = useState<'pie' | 'level'>('pie')
 
   const nodes = useCoffeeStore((state) => state.nodes)
   const edges = useCoffeeStore((state) => state.edges)
@@ -267,6 +269,31 @@ export function ExplorerView() {
               >
                 Schema
               </button>
+              {viewMode === 'graph' && (
+                <>
+                  <span className="ml-2 text-[11px] text-slate-500">Node-vulling</span>
+                  <button
+                    onClick={() => setMilkVisualMode('pie')}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                      milkVisualMode === 'pie'
+                        ? 'bg-coffee-400 text-night-950'
+                        : 'bg-white/10 text-slate-200 hover:bg-white/20'
+                    }`}
+                  >
+                    Pie
+                  </button>
+                  <button
+                    onClick={() => setMilkVisualMode('level')}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                      milkVisualMode === 'level'
+                        ? 'bg-coffee-400 text-night-950'
+                        : 'bg-white/10 text-slate-200 hover:bg-white/20'
+                    }`}
+                  >
+                    Niveau
+                  </button>
+                </>
+              )}
             </div>
             <div>
               <span>{graphNodes.length} directe relaties zichtbaar</span>
@@ -287,6 +314,7 @@ export function ExplorerView() {
               selectedId={selectedNodeId}
               compareIds={compareIds}
               focusedId={focusedNodeId}
+              milkVisualMode={milkVisualMode}
               onSelect={(id, shift) => {
                 if (shift) {
                   toggleCompareId(id)

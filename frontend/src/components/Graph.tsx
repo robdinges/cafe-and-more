@@ -7,6 +7,7 @@ interface GraphProps {
   selectedId: string | null
   compareIds: string[]
   focusedId: string | null
+  milkVisualMode: 'pie' | 'level'
   onSelect: (id: string, shift: boolean) => void
   onHover: (id: string | null) => void
 }
@@ -21,6 +22,7 @@ const relationText: Record<RelationType, string> = {
 const countryText: Record<string, string> = {
   italy: 'Italie',
   spain: 'Spanje',
+  france: 'Frankrijk',
 }
 
 const nameForBubble = (name: string) => {
@@ -63,12 +65,71 @@ const fillForNode = (node: CoffeeNode) => {
 
 const radiusForVolume = (volume: number) => 24 + ((volume - 20) / 280) * 30
 
+const coffeeLiquidForNode = (node: CoffeeNode) => (node.country === 'italy' ? '#5b2f12' : '#3b2a1a')
+
+const initialsForAvatar = (name: string) => {
+  const words = name
+    .split(/\s+/)
+    .map((word) => word.trim())
+    .filter(Boolean)
+
+  if (words.length === 0) {
+    return '?'
+  }
+
+  if (words.length === 1) {
+    return words[0].slice(0, 2).toUpperCase()
+  }
+
+  return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase()
+}
+
+const avatarSvgDataUri = (node: CoffeeNode) => {
+  const label = initialsForAvatar(node.name)
+  const bg = node.country === 'italy' ? '#b45309' : '#0369a1'
+  const rim = node.country === 'italy' ? '#f59e0b' : '#38bdf8'
+  const cup = '#f8fafc'
+  const coffee = node.milk > 45 ? '#e2e8f0' : '#5b2f12'
+
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>
+    <rect width='64' height='64' rx='14' fill='${bg}'/>
+    <circle cx='32' cy='32' r='23' fill='none' stroke='${rim}' stroke-width='2'/>
+    <rect x='17' y='28' width='28' height='16' rx='4' fill='${cup}'/>
+    <path d='M45 31h4a4 4 0 1 1 0 8h-4' fill='none' stroke='${cup}' stroke-width='3' stroke-linecap='round'/>
+    <rect x='20' y='30.5' width='22' height='5.5' rx='2.5' fill='${coffee}'/>
+    <text x='32' y='53' text-anchor='middle' font-family='ui-sans-serif,Segoe UI,Arial' font-size='10' font-weight='700' fill='#ffffff'>${label}</text>
+  </svg>`
+
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
+}
+
+const pieSlicePath = (radius: number, percent: number) => {
+  if (percent <= 0) {
+    return null
+  }
+
+  if (percent >= 100) {
+    return null
+  }
+
+  const startAngle = -Math.PI / 2
+  const endAngle = startAngle + (Math.PI * 2 * percent) / 100
+  const x1 = Math.cos(startAngle) * radius
+  const y1 = Math.sin(startAngle) * radius
+  const x2 = Math.cos(endAngle) * radius
+  const y2 = Math.sin(endAngle) * radius
+  const largeArcFlag = percent > 50 ? 1 : 0
+
+  return `M 0 0 L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`
+}
+
 export function Graph({
   nodes,
   edges,
   selectedId,
   compareIds,
   focusedId,
+  milkVisualMode,
   onSelect,
   onHover,
 }: GraphProps) {
@@ -146,6 +207,74 @@ export function Graph({
 
   const hasCenter = Boolean(centerNode)
 
+  const renderNodeBubble = (node: CoffeeNode, isActive: boolean, isCompared: boolean) => {
+    const outerRadius = radiusForVolume(node.volume_ml)
+    const innerRadius = Math.max(outerRadius - 6, 10)
+    const avatarRadius = Math.max(innerRadius * 0.42, 10)
+    const milkPercent = Math.min(Math.max(node.milk, 0), 100)
+    const clipId = `clip-${node.id}`
+    const avatarClipId = `avatar-clip-${node.id}`
+    const coffeeColor = coffeeLiquidForNode(node)
+    const slice = pieSlicePath(innerRadius, milkPercent)
+    const milkHeight = (innerRadius * 2 * milkPercent) / 100
+    const milkTopY = innerRadius - milkHeight
+    const avatarHref = avatarSvgDataUri(node)
+
+    return (
+      <>
+        <defs>
+          <clipPath id={clipId}>
+            <circle r={innerRadius} />
+          </clipPath>
+          <clipPath id={avatarClipId}>
+            <circle r={avatarRadius} />
+          </clipPath>
+        </defs>
+
+        <circle
+          r={outerRadius}
+          fill={fillForNode(node)}
+          stroke={isActive ? '#f8fafc' : isCompared ? '#34d399' : '#0b0f14'}
+          strokeWidth={isActive ? 3.5 : isCompared ? 3 : 2}
+        />
+
+        <circle r={innerRadius} fill={coffeeColor} opacity={0.95} />
+
+        {milkVisualMode === 'pie' ? (
+          milkPercent >= 100 ? (
+            <circle r={innerRadius} fill="#f8fafc" opacity={0.9} />
+          ) : (
+            slice && <path d={slice} fill="#f8fafc" opacity={0.9} />
+          )
+        ) : (
+          <rect
+            x={-innerRadius}
+            y={milkTopY}
+            width={innerRadius * 2}
+            height={milkHeight}
+            fill="#f8fafc"
+            opacity={0.9}
+            clipPath={`url(#${clipId})`}
+          />
+        )}
+
+        <circle r={avatarRadius} fill="#0f172a" stroke="#f8fafc" strokeWidth={2} opacity={0.95} />
+        <image
+          href={avatarHref}
+          x={-avatarRadius}
+          y={-avatarRadius}
+          width={avatarRadius * 2}
+          height={avatarRadius * 2}
+          preserveAspectRatio="xMidYMid slice"
+          clipPath={`url(#${avatarClipId})`}
+        />
+        <text textAnchor="middle" dy=".35em" fill="#f8fafc" fontSize={Math.max(avatarRadius * 0.46, 8)} fontWeight={700} opacity={0}>
+          {initialsForAvatar(node.name)}
+        </text>
+      </>
+    )
+  }
+
   return (
     <div className="panel relative h-[560px] w-full overflow-hidden rounded-2xl p-2">
       <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full" role="img" aria-label="Schema met directe relaties">
@@ -179,19 +308,8 @@ export function Graph({
             onClick={(event) => onSelect(centerNode.id, event.shiftKey)}
             style={{ cursor: 'pointer' }}
           >
-            <circle
-              r={radiusForVolume(centerNode.volume_ml)}
-              fill={fillForNode(centerNode)}
-              stroke="#f8fafc"
-              strokeWidth={3}
-            />
-            <text
-              textAnchor="middle"
-              dy=".35em"
-              fill="#f8fafc"
-              fontSize="11"
-              fontWeight={800}
-            >
+            {renderNodeBubble(centerNode, true, compareIds.includes(centerNode.id))}
+            <text textAnchor="middle" y={radiusForVolume(centerNode.volume_ml) + 16} fill="#f8fafc" fontSize="11" fontWeight={800}>
               {nameForBubble(centerNode.name)}
             </text>
           </g>
@@ -212,15 +330,10 @@ export function Graph({
               onClick={(event) => onSelect(item.other.id, event.shiftKey)}
               style={{ cursor: 'pointer' }}
             >
-              <circle
-                r={radiusForVolume(item.other.volume_ml)}
-                fill={fillForNode(item.other)}
-                stroke={active ? '#f8fafc' : compared ? '#34d399' : '#0b0f14'}
-                strokeWidth={active ? 3.5 : compared ? 3 : 2}
-              />
+              {renderNodeBubble(item.other, active, compared)}
               <text
                 textAnchor="middle"
-                dy=".35em"
+                y={radiusForVolume(item.other.volume_ml) + 15}
                 fill="#f8fafc"
                 fontSize={active ? 11 : 10}
                 fontWeight={800}

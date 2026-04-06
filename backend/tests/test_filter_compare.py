@@ -38,6 +38,18 @@ class FilterCompareTests(unittest.TestCase):
         self.assertIn('espresso', ids)
         self.assertIn('cafe-con-leche', ids)
 
+    def test_filter_france_search(self) -> None:
+        payload = FilterPayload(
+            countries=['france'],
+            milkLevel='all',
+            milkRange=[0, 100],
+            strength=[1, 5],
+            volume=[20, 300],
+            search='grand',
+        )
+        result = filter_graph(payload)
+        self.assertEqual(result.nodes, ['grand-creme'])
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,4 +1,4 @@
-export type CountryId = 'italy' | 'spain'
+export type CountryId = 'italy' | 'spain' | 'france'
 
 export type RelationType =
   | 'variant_of'

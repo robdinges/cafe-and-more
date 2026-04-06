@@ -3,7 +3,7 @@ import { coffeeNodes } from '../data/coffees'
 import { CoffeeNode, CompareMetrics, CountryId, FilterState, GraphEdge } from '../types/coffee'
 
 const defaultFilters: FilterState = {
-  countries: ['italy', 'spain'],
+  countries: ['italy', 'spain', 'france'],
   milkRange: [0, 100],
   strength: [1, 5],
   volume: [20, 280],

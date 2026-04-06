@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-CountryId = Literal['italy', 'spain']
+CountryId = Literal['italy', 'spain', 'france']
 RelationType = Literal['variant_of', 'similar_to', 'contains_milk', 'popular_in_country']
 MilkLevel = Literal['all', 'none', 'little', 'much']
 

@@ -41,8 +41,19 @@ export function Sidebar({
                 style={{ cursor: 'pointer' }}
                 onClick={() => onCountryToggle('italy')}
               />
+              <polygon
+                points="88,38 104,34 114,40 116,55 108,70 95,74 84,66 82,50"
+                fill={filters.countries.includes('france') ? '#93c5fd' : '#334155'}
+                stroke="#d1d5db"
+                strokeWidth="1.2"
+                style={{ cursor: 'pointer' }}
+                onClick={() => onCountryToggle('france')}
+              />
               <text x="36" y="110" fontSize="10" fill="#cbd5e1">
                 Spanje
+              </text>
+              <text x="82" y="95" fontSize="10" fill="#cbd5e1">
+                Frankrijk
               </text>
               <text x="142" y="126" fontSize="10" fill="#cbd5e1">
                 Italie
@@ -50,7 +61,7 @@ export function Sidebar({
             </svg>
           </div>
           <div className="mt-2 flex flex-wrap gap-2">
-            {(['italy', 'spain'] as CountryId[]).map((country) => {
+            {(['italy', 'spain', 'france'] as CountryId[]).map((country) => {
               const active = filters.countries.includes(country)
               return (
                 <button
@@ -62,7 +73,7 @@ export function Sidebar({
                       : 'bg-white/5 text-slate-200 hover:bg-white/10'
                   }`}
                 >
-                  {country === 'italy' ? 'Italie' : 'Spanje'}
+                  {country === 'italy' ? 'Italie' : country === 'spain' ? 'Spanje' : 'Frankrijk'}
                 </button>
               )
             })}

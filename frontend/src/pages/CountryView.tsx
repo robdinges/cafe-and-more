@@ -5,7 +5,8 @@ import { CountryId } from '../types/coffee'
 
 export function CountryView() {
   const params = useParams<{ countryId: CountryId }>()
-  const countryId: CountryId = params.countryId === 'spain' ? 'spain' : 'italy'
+  const countryId: CountryId =
+    params.countryId === 'spain' ? 'spain' : params.countryId === 'france' ? 'france' : 'italy'
   const nodes = useCoffeeStore((state) => state.nodes)
 
   const coffees = nodes.filter((node) => node.country === countryId)
@@ -38,6 +39,16 @@ export function CountryView() {
             }`}
           >
             Spain
+          </Link>
+          <Link
+            to="/country/france"
+            className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
+              countryId === 'france'
+                ? 'bg-coffee-400 text-night-950'
+                : 'bg-white/10 text-white hover:bg-white/20'
+            }`}
+          >
+            France
           </Link>
         </div>
       </header>
